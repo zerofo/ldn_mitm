@@ -6,23 +6,52 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    container:
+      image: devkitpro/devkita64:latest
+
+    defaults:
+      run:
+        shell: bash
+
     steps:
-    - uses: actions/checkout@v1
-      with:
-        submodules: true
-    - uses: spacemeowx2/devkitpro-action@latest
-      with:
-        cmd: make -j8
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
 
-    - name: Upload built files
-      uses: actions/upload-artifact@v1
-      with:
-        name: sdcard
-        path: out/sd
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
 
-    - name: Upload elf file
-      uses: actions/upload-artifact@v1
-      with:
-        name: ldn_mitm.elf
-        path: ldn_mitm/ldn_mitm.elf
-  
+      - name: Build
+        id: build
+        run: make -j8 PREFIX="ccache aarch64-none-elf-"
+        continue-on-error: true
+
+      - name: Install libnx master & Retry build
+        id: retry
+        if: ${{ steps.build.outcome == 'failure' }}
+        run: |
+          pushd /tmp
+          git clone https://github.com/switchbrew/libnx
+          cd libnx
+          make -j8 PREFIX="ccache aarch64-none-elf-"
+          make install
+          popd
+          make -j8 PREFIX="ccache aarch64-none-elf-"
+
+      - name: Upload built files
+        uses: actions/upload-artifact@v3
+        with:
+          name: sdcard
+          path: out/sd
+
+      - name: Upload elf file
+        uses: actions/upload-artifact@v3
+        with:
+          name: ldn_mitm.elf
+          path: ldn_mitm/ldn_mitm.elf
+
+      - name: Upload elf file
+        uses: actions/upload-artifact@v3
+        with:
+          name: ldn_mitm.elf
+          path: overlay/overlay.elf
